@@ -15,11 +15,6 @@ final class EventEmitter {
     func sendEvent(ofType type: EventType, userInfo: [String: Any]? = nil) async {
         guard let deviceId = defaults.string(forKey: PiesKey.deviceId) else { return }
 
-        if type == .sessionEnd {
-            logger.debug("Session End events are not currently supported.")
-            return
-        }
-
         let event = EventBuilder.build(type: type, deviceId: deviceId, userInfo: userInfo)
         await sendEvent(event)
     }

@@ -7,8 +7,6 @@ enum PiesKey {
     static let deviceId = "pies-device-id"
     static let installDate = "pies-install-date"
     static let deviceActiveTodayDate = "pies-device-active-today-date"
-    static let deviceActiveThisWeekDate = "pies-device-active-this-week-date"
-    static let deviceActiveThisMonthDate = "pies-device-active-this-month-date"
     static let stopTrackingUntil = "pies-stop-tracking-until"
     static let stopTrackingReason = "pies-stop-tracking-reason"
     static let trackingStopped = "pies-tracking-stopped"

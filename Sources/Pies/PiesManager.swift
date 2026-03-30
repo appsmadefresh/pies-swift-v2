@@ -106,22 +106,15 @@ final class PiesManager {
         }
     }
 
-    // MARK: - Active device tracking
+    // MARK: - Active device tracking (daily only — WAU/MAU derived in Postgres)
 
     private func sendActiveDevice() {
         let now = Date()
-
-        func checkAndSend(key: String, boundary: Int, type: EventType) {
-            let stored = defaults.string(forKey: key).flatMap { Int($0) }
-            if stored == nil || stored != boundary {
-                defaults.set("\(boundary)", forKey: key)
-                Task { await eventEmitter?.sendEvent(ofType: type) }
-            }
+        let stored = defaults.string(forKey: PiesKey.deviceActiveTodayDate).flatMap { Int($0) }
+        if stored == nil || stored != now.startOfDay {
+            defaults.set("\(now.startOfDay)", forKey: PiesKey.deviceActiveTodayDate)
+            Task { await eventEmitter?.sendEvent(ofType: .deviceActiveToday) }
         }
-
-        checkAndSend(key: PiesKey.deviceActiveTodayDate, boundary: now.startOfDay, type: .deviceActiveToday)
-        checkAndSend(key: PiesKey.deviceActiveThisWeekDate, boundary: now.startOfWeek, type: .deviceActiveThisWeek)
-        checkAndSend(key: PiesKey.deviceActiveThisMonthDate, boundary: now.startOfMonth, type: .deviceActiveThisMonth)
     }
 
     deinit {
