@@ -1,5 +1,12 @@
+import UIKit
 import Foundation
-import os
+
+public enum EventType: String, Sendable {
+    case newInstall
+    case sessionStart
+    case inAppPurchase
+    case deviceActiveToday
+}
 
 final class EventEmitter {
 
@@ -10,6 +17,13 @@ final class EventEmitter {
     private let defaults: UserDefaults
     private let cache: EventCache
     private let logger = PiesLogger.shared
+
+    private static let session: URLSession = {
+        let config = URLSessionConfiguration.ephemeral
+        config.timeoutIntervalForRequest = 15
+        config.timeoutIntervalForResource = 30
+        return URLSession(configuration: config)
+    }()
 
     init(appId: String, apiKey: String, baseURL: String, deviceId: String, defaults: UserDefaults) {
         self.appId = appId
@@ -22,8 +36,7 @@ final class EventEmitter {
 
     func sendEvent(ofType type: EventType, userInfo: [String: Any]? = nil) async {
         guard !deviceId.isEmpty else { return }
-
-        let event = EventBuilder.build(type: type, deviceId: deviceId, userInfo: userInfo)
+        let event = buildEvent(type: type, userInfo: userInfo)
         await sendEvent(event)
     }
 
@@ -44,27 +57,21 @@ final class EventEmitter {
             return
         }
 
-        guard let request = APIBuilder.request(
-            event: event, appId: appId, apiKey: apiKey, baseURL: baseURL
-        ) else { return }
+        guard let request = buildRequest(event: event) else { return }
 
-        let eventType = event[EventField.eventType.rawValue] as? String ?? "unknown"
+        let eventType = event["eventType"] as? String ?? "unknown"
         logger.debug("Sending event: \(eventType)")
 
         do {
-            let (data, response) = try await URLSession.shared.data(for: request)
+            let (data, response) = try await Self.session.data(for: request)
 
             guard let httpResponse = response as? HTTPURLResponse else { return }
 
             switch httpResponse.statusCode {
             case 200:
                 handleResponse(data: data, event: event)
-            case 400:
-                logger.error("Invalid request (400)")
-            case 401:
-                logger.error("Unauthorized (401)")
-            case 403:
-                logger.error("Forbidden (403)")
+            case 400, 401, 403:
+                logger.error("Server rejected event (\(httpResponse.statusCode))")
             default:
                 await cache.putBack(event)
             }
@@ -84,7 +91,67 @@ final class EventEmitter {
         }
     }
 
-    // MARK: - Private
+    // MARK: - Event building
+
+    private static let appVersion: String = {
+        Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "unknown"
+    }()
+
+    private func buildEvent(type: EventType, userInfo: [String: Any]?) -> [String: Any] {
+        var event: [String: Any] = [
+            "timestamp": Date().timeIntervalSince1970,
+            "eventType": type.rawValue,
+            "deviceId": deviceId,
+            "deviceType": UIDevice.modelIdentifier,
+            "appVersion": Self.appVersion,
+            "frameworkVersion": "2.0.0",
+            "osVersion": UIDevice.current.systemVersion,
+            "locale": Locale.current.identifier,
+        ]
+
+        if let region = Locale.current.region?.identifier {
+            event["regionCode"] = region
+        }
+
+        if let userInfo {
+            for (key, value) in userInfo {
+                event[key] = value
+            }
+        }
+
+        return event
+    }
+
+    // MARK: - Request building
+
+    private func buildRequest(event: [String: Any]) -> URLRequest? {
+        guard let url = URL(string: "\(baseURL)/trackEvent") else {
+            logger.error("Invalid base URL")
+            return nil
+        }
+
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.addValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.addValue("Pies-iOS/2.0.0", forHTTPHeaderField: "User-Agent")
+
+        let body: [String: Any] = [
+            "appId": appId,
+            "apiKey": apiKey,
+            "event": event,
+        ]
+
+        do {
+            request.httpBody = try JSONSerialization.data(withJSONObject: body)
+        } catch {
+            logger.error("Failed to serialize event")
+            return nil
+        }
+
+        return request
+    }
+
+    // MARK: - Response handling
 
     private func handleResponse(data: Data, event: [String: Any]) {
         guard let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
@@ -108,6 +175,12 @@ final class EventEmitter {
                 Task { await cache.push(event) }
             }
         }
+    }
+
+    // MARK: - Tracking status
+
+    private enum TrackingStatus {
+        case active, paused, stopped
     }
 
     private var trackingStatus: TrackingStatus {

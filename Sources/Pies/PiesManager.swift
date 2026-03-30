@@ -1,6 +1,5 @@
 import UIKit
 import StoreKit
-import os
 
 final class PiesManager {
     static let shared = PiesManager()
@@ -11,21 +10,16 @@ final class PiesManager {
     private var transactionTask: Task<Void, Never>?
     private var isConfigured = false
 
-    private static let lastBackgroundTimestampKey = "last-app-background-timestamp"
+    private static let lastBackgroundTimestampKey = "pies-last-background-timestamp"
     private static let continueSessionInterval: TimeInterval = 5
+
+    private static let iso8601Calendar: Calendar = Calendar(identifier: .iso8601)
 
     var deviceId: String? {
         defaults.string(forKey: PiesKey.deviceId)
     }
 
-    private let keychain: KeychainSwift = {
-        let kc = KeychainSwift()
-        kc.synchronizable = true
-        return kc
-    }()
-
     func configure(appId: String, apiKey: String, baseURL: String, logLevel: PiesLogLevel) {
-        // Clean up if configure() is called more than once.
         if isConfigured {
             transactionTask?.cancel()
             NotificationCenter.default.removeObserver(self)
@@ -33,11 +27,6 @@ final class PiesManager {
 
         PiesLogger.shared.level = logLevel
 
-        defaults.set(appId, forKey: PiesKey.appId)
-        defaults.set(apiKey, forKey: PiesKey.apiKey)
-        defaults.set(baseURL, forKey: PiesKey.baseURL)
-
-        // Ensure device ID exists before creating the emitter.
         ensureDeviceId()
 
         NetworkMonitor.shared.start()
@@ -52,13 +41,15 @@ final class PiesManager {
         self.eventEmitter = emitter
 
         // File I/O and keychain access happen off the main thread.
-        Task.detached { [weak self] in
+        Task(priority: .background) { [weak self] in
             self?.checkForNewInstall()
         }
 
         let observer = StoreObserver(eventEmitter: emitter)
         self.storeObserver = observer
-        transactionTask = Task.detached { await observer.listenForTransactions() }
+        transactionTask = Task(priority: .background) {
+            await observer.listenForTransactions()
+        }
 
         startListening()
         isConfigured = true
@@ -117,25 +108,26 @@ final class PiesManager {
         let elapsed = Date().timeIntervalSince1970 - installDate.timeIntervalSince1970
         guard elapsed <= 86400 else { return }
 
-        let isFirstInstall = keychain.get(KeychainKey.firstInstallDate) == nil
+        let isFirstInstall = PiesKeychain.get(PiesKeychain.firstInstallDateKey) == nil
         if isFirstInstall {
-            keychain.set("\(installDate.timeIntervalSince1970)", forKey: KeychainKey.firstInstallDate)
+            PiesKeychain.set("\(installDate.timeIntervalSince1970)", forKey: PiesKeychain.firstInstallDateKey)
         }
 
         Task {
             var info: [String: Any]? = nil
-            if isFirstInstall { info = [EventField.isFirstInstall.rawValue: true] }
+            if isFirstInstall { info = ["isFirstInstall": true] }
             await eventEmitter?.sendEvent(ofType: .newInstall, userInfo: info)
         }
     }
 
-    // MARK: - Active device tracking (daily only — WAU/MAU derived in Postgres)
+    // MARK: - Active device tracking
 
     private func sendActiveDevice() {
         let now = Date()
+        let startOfDay = Int(Self.iso8601Calendar.startOfDay(for: now).timeIntervalSince1970)
         let stored = defaults.string(forKey: PiesKey.deviceActiveTodayDate).flatMap { Int($0) }
-        if stored == nil || stored != now.startOfDay {
-            defaults.set("\(now.startOfDay)", forKey: PiesKey.deviceActiveTodayDate)
+        if stored == nil || stored != startOfDay {
+            defaults.set("\(startOfDay)", forKey: PiesKey.deviceActiveTodayDate)
             Task { await eventEmitter?.sendEvent(ofType: .deviceActiveToday) }
         }
     }

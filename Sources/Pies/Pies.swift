@@ -1,6 +1,7 @@
 import Foundation
 
-public final class Pies: Sendable {
+/// Pies Analytics SDK — lightweight, automatic tracking for iOS apps.
+public enum Pies {
 
     /// Configure Pies with your appId and apiKey.
     /// - Parameters:
@@ -14,7 +15,10 @@ public final class Pies: Sendable {
         baseURL: String = "https://pies-server-v2-production.up.railway.app",
         logLevel: PiesLogLevel = .info
     ) {
-        precondition(!appId.isEmpty && !apiKey.isEmpty, "You must provide a valid appId and apiKey.")
+        guard !appId.isEmpty, !apiKey.isEmpty else {
+            PiesLogger.shared.error("Pies.configure() requires non-empty appId and apiKey")
+            return
+        }
         PiesManager.shared.configure(appId: appId, apiKey: apiKey, baseURL: baseURL, logLevel: logLevel)
     }
 
@@ -22,4 +26,11 @@ public final class Pies: Sendable {
     public static var deviceId: String? {
         PiesManager.shared.deviceId
     }
+}
+
+public enum PiesLogLevel: Sendable {
+    case none
+    case info
+    case error
+    case debug
 }
