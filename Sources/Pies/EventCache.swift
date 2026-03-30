@@ -5,6 +5,7 @@ actor EventCache {
 
     private let defaults: UserDefaults
     private static let key = "pies-cached-events"
+    private static let maxSize = 500
 
     init(defaults: UserDefaults) {
         self.defaults = defaults
@@ -12,30 +13,33 @@ actor EventCache {
 
     func push(_ event: [String: Any]) {
         var events = loadEvents()
+        if events.count >= Self.maxSize {
+            events.removeFirst()
+        }
         events.append(event)
         save(events)
-    }
-
-    func pop() -> [String: Any]? {
-        var events = loadEvents()
-        guard !events.isEmpty else { return nil }
-        let event = events.removeFirst() as? [String: Any]
-        save(events)
-        return event
     }
 
     func putBack(_ event: [String: Any]) {
         var events = loadEvents()
         events.insert(event, at: 0)
+        if events.count > Self.maxSize {
+            events.removeLast()
+        }
         save(events)
+    }
+
+    /// Drain all cached events in one UserDefaults round-trip.
+    func drainAll() -> [[String: Any]] {
+        let events = loadEvents()
+        if !events.isEmpty {
+            save([])
+        }
+        return events.compactMap { $0 as? [String: Any] }
     }
 
     var count: Int {
         loadEvents().count
-    }
-
-    var isEmpty: Bool {
-        loadEvents().isEmpty
     }
 
     private func loadEvents() -> [Any] {

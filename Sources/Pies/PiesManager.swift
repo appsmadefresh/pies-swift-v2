@@ -9,6 +9,7 @@ final class PiesManager {
     private var eventEmitter: EventEmitter?
     private var storeObserver: StoreObserver?
     private var transactionTask: Task<Void, Never>?
+    private var isConfigured = false
 
     private static let lastBackgroundTimestampKey = "last-app-background-timestamp"
     private static let continueSessionInterval: TimeInterval = 5
@@ -24,25 +25,43 @@ final class PiesManager {
     }()
 
     func configure(appId: String, apiKey: String, baseURL: String, logLevel: PiesLogLevel) {
+        // Clean up if configure() is called more than once.
+        if isConfigured {
+            transactionTask?.cancel()
+            NotificationCenter.default.removeObserver(self)
+        }
+
         PiesLogger.shared.level = logLevel
 
         defaults.set(appId, forKey: PiesKey.appId)
         defaults.set(apiKey, forKey: PiesKey.apiKey)
         defaults.set(baseURL, forKey: PiesKey.baseURL)
 
+        // Ensure device ID exists before creating the emitter.
+        ensureDeviceId()
+
         NetworkMonitor.shared.start()
 
-        let emitter = EventEmitter(defaults: defaults)
+        let emitter = EventEmitter(
+            appId: appId,
+            apiKey: apiKey,
+            baseURL: baseURL,
+            deviceId: defaults.string(forKey: PiesKey.deviceId) ?? "",
+            defaults: defaults
+        )
         self.eventEmitter = emitter
 
-        checkForNewInstall()
+        // File I/O and keychain access happen off the main thread.
+        Task.detached { [weak self] in
+            self?.checkForNewInstall()
+        }
 
-        // StoreKit 2: listen for verified transactions.
         let observer = StoreObserver(eventEmitter: emitter)
         self.storeObserver = observer
         transactionTask = Task.detached { await observer.listenForTransactions() }
 
         startListening()
+        isConfigured = true
 
         PiesLogger.shared.info("Initialized Pies v2")
     }
@@ -75,7 +94,16 @@ final class PiesManager {
         defaults.set(Date().timeIntervalSince1970, forKey: Self.lastBackgroundTimestampKey)
     }
 
-    // MARK: - Install detection
+    // MARK: - Device ID
+
+    private func ensureDeviceId() {
+        if defaults.string(forKey: PiesKey.deviceId) == nil {
+            let id = UIDevice.current.identifierForVendor?.uuidString ?? UUID().uuidString
+            defaults.set(id, forKey: PiesKey.deviceId)
+        }
+    }
+
+    // MARK: - Install detection (runs off main thread)
 
     private func checkForNewInstall() {
         guard defaults.string(forKey: PiesKey.installDate) == nil else { return }
@@ -85,11 +113,6 @@ final class PiesManager {
               let installDate = attrs[.creationDate] as? Date else { return }
 
         defaults.set("\(installDate.timeIntervalSince1970)", forKey: PiesKey.installDate)
-
-        if defaults.string(forKey: PiesKey.deviceId) == nil {
-            let id = UIDevice.current.identifierForVendor?.uuidString ?? UUID().uuidString
-            defaults.set(id, forKey: PiesKey.deviceId)
-        }
 
         let elapsed = Date().timeIntervalSince1970 - installDate.timeIntervalSince1970
         guard elapsed <= 86400 else { return }

@@ -3,26 +3,31 @@ import os
 
 final class EventEmitter {
 
+    private let appId: String
+    private let apiKey: String
+    private let baseURL: String
+    private let deviceId: String
     private let defaults: UserDefaults
     private let cache: EventCache
     private let logger = PiesLogger.shared
 
-    init(defaults: UserDefaults) {
+    init(appId: String, apiKey: String, baseURL: String, deviceId: String, defaults: UserDefaults) {
+        self.appId = appId
+        self.apiKey = apiKey
+        self.baseURL = baseURL
+        self.deviceId = deviceId
         self.defaults = defaults
         self.cache = EventCache(defaults: defaults)
     }
 
     func sendEvent(ofType type: EventType, userInfo: [String: Any]? = nil) async {
-        guard let deviceId = defaults.string(forKey: PiesKey.deviceId) else { return }
+        guard !deviceId.isEmpty else { return }
 
         let event = EventBuilder.build(type: type, deviceId: deviceId, userInfo: userInfo)
         await sendEvent(event)
     }
 
     func sendEvent(_ event: [String: Any]) async {
-        guard let appId = defaults.string(forKey: PiesKey.appId),
-              let apiKey = defaults.string(forKey: PiesKey.apiKey) else { return }
-
         switch trackingStatus {
         case .active: break
         case .paused:
@@ -38,9 +43,6 @@ final class EventEmitter {
             await cache.push(event)
             return
         }
-
-        let baseURL = defaults.string(forKey: PiesKey.baseURL)
-            ?? "https://pies-server-v2-production.up.railway.app"
 
         guard let request = APIBuilder.request(
             event: event, appId: appId, apiKey: apiKey, baseURL: baseURL
@@ -64,7 +66,6 @@ final class EventEmitter {
             case 403:
                 logger.error("Forbidden (403)")
             default:
-                // Retryable — cache the event.
                 await cache.putBack(event)
             }
         } catch {
@@ -77,11 +78,9 @@ final class EventEmitter {
         guard !defaults.bool(forKey: PiesKey.trackingStopped) else { return }
         guard NetworkMonitor.shared.isOnline else { return }
 
-        let count = await cache.count
-        for _ in 0..<count {
-            if let event = await cache.pop() {
-                await sendEvent(event)
-            }
+        let events = await cache.drainAll()
+        for event in events {
+            await sendEvent(event)
         }
     }
 
