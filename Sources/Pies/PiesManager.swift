@@ -16,7 +16,7 @@ final class PiesManager {
     private static let iso8601Calendar: Calendar = Calendar(identifier: .iso8601)
 
     var deviceId: String? {
-        defaults.string(forKey: PiesKey.deviceId)
+        PiesKeychain.get(PiesKeychain.deviceIdKey)
     }
 
     func configure(appId: String, apiKey: String, baseURL: String, logLevel: PiesLogLevel) {
@@ -35,7 +35,7 @@ final class PiesManager {
             appId: appId,
             apiKey: apiKey,
             baseURL: baseURL,
-            deviceId: defaults.string(forKey: PiesKey.deviceId) ?? "",
+            deviceId: PiesKeychain.get(PiesKeychain.deviceIdKey) ?? "",
             defaults: defaults
         )
         self.eventEmitter = emitter
@@ -88,9 +88,9 @@ final class PiesManager {
     // MARK: - Device ID
 
     private func ensureDeviceId() {
-        if defaults.string(forKey: PiesKey.deviceId) == nil {
+        if PiesKeychain.get(PiesKeychain.deviceIdKey) == nil {
             let id = UIDevice.current.identifierForVendor?.uuidString ?? UUID().uuidString
-            defaults.set(id, forKey: PiesKey.deviceId)
+            PiesKeychain.set(id, forKey: PiesKeychain.deviceIdKey)
         }
     }
 

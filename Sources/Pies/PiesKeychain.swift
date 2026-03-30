@@ -4,12 +4,12 @@ import Security
 /// Minimal keychain wrapper — only what the SDK needs.
 enum PiesKeychain {
     static let firstInstallDateKey = "pies-keychain-first-install-date"
+    static let deviceIdKey = "pies-keychain-device-id"
 
     static func get(_ key: String) -> String? {
         let query: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,
             kSecAttrAccount as String: key,
-            kSecAttrSynchronizable as String: kSecAttrSynchronizableAny,
             kSecReturnData as String: true,
             kSecMatchLimit as String: kSecMatchLimitOne,
         ]
@@ -26,7 +26,6 @@ enum PiesKeychain {
         let query: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,
             kSecAttrAccount as String: key,
-            kSecAttrSynchronizable as String: true,
             kSecValueData as String: data,
             kSecAttrAccessible as String: kSecAttrAccessibleAfterFirstUnlock,
         ]
@@ -38,7 +37,6 @@ enum PiesKeychain {
         let query: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,
             kSecAttrAccount as String: key,
-            kSecAttrSynchronizable as String: kSecAttrSynchronizableAny,
         ]
         return SecItemDelete(query as CFDictionary) == errSecSuccess
     }

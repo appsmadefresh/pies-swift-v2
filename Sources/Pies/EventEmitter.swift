@@ -140,10 +140,10 @@ final class EventEmitter {
         request.httpMethod = "POST"
         request.addValue("application/json", forHTTPHeaderField: "Content-Type")
         request.addValue("Pies-iOS/\(Self.sdkVersion)", forHTTPHeaderField: "User-Agent")
+        request.addValue(apiKey, forHTTPHeaderField: "X-API-Key")
 
         let body: [String: Any] = [
             "appId": appId,
-            "apiKey": apiKey,
             "event": event,
         ]
 

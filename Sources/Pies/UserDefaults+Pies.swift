@@ -1,7 +1,6 @@
 import Foundation
 
 enum PiesKey {
-    static let deviceId = "pies-device-id"
     static let installDate = "pies-install-date"
     static let deviceActiveTodayDate = "pies-device-active-today-date"
     static let stopTrackingUntil = "pies-stop-tracking-until"
@@ -11,5 +10,12 @@ enum PiesKey {
 }
 
 extension UserDefaults {
-    static let pies = UserDefaults(suiteName: "com.pies.framework.v2")!
+    static let pies: UserDefaults = {
+        guard let defaults = UserDefaults(suiteName: "com.pies.framework.v2") else {
+            // This should never fail — non-group suite names always succeed.
+            // Fall back to standard defaults so the SDK doesn't crash the host app.
+            return UserDefaults.standard
+        }
+        return defaults
+    }()
 }
