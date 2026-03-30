@@ -1,6 +1,7 @@
 import UIKit
 import StoreKit
 
+@MainActor
 final class PiesManager {
     static let shared = PiesManager()
 

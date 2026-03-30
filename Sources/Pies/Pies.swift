@@ -1,6 +1,7 @@
 import Foundation
 
 /// Pies Analytics SDK — lightweight, automatic tracking for iOS apps.
+@MainActor
 public enum Pies {
 
     /// Configure Pies with your appId and apiKey.
@@ -17,6 +18,10 @@ public enum Pies {
     ) {
         guard !appId.isEmpty, !apiKey.isEmpty else {
             PiesLogger.shared.error("Pies.configure() requires non-empty appId and apiKey")
+            return
+        }
+        guard baseURL.hasPrefix("https://"), URL(string: "\(baseURL)/trackEvent") != nil else {
+            PiesLogger.shared.error("Pies.configure() requires a valid HTTPS base URL")
             return
         }
         PiesManager.shared.configure(appId: appId, apiKey: apiKey, baseURL: baseURL, logLevel: logLevel)
