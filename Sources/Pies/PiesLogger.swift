@@ -8,7 +8,7 @@ final class PiesLogger {
     private let logger = Logger(subsystem: "com.fresh.Pies", category: "Pies")
 
     func info(_ message: String) {
-        guard level == .info || level == .error || level == .debug else { return }
+        guard level == .info || level == .debug else { return }
         logger.info("Pies [Info] \(message)")
     }
 
