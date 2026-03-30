@@ -38,7 +38,7 @@ final class StoreObserver {
             case .autoRenewable:
                 info["isSubscription"] = true
                 if let sub = product.subscription {
-                    info["subscriptionPeriodUnit"] = String(describing: sub.subscriptionPeriod.unit)
+                    info["subscriptionPeriodUnit"] = periodUnitString(sub.subscriptionPeriod.unit)
                     info["subscriptionPeriodValue"] = sub.subscriptionPeriod.value
                 }
             default:
@@ -47,5 +47,15 @@ final class StoreObserver {
         }
 
         await eventEmitter.sendEvent(ofType: .inAppPurchase, userInfo: info)
+    }
+
+    private func periodUnitString(_ unit: Product.SubscriptionPeriod.Unit) -> String {
+        switch unit {
+        case .day: "day"
+        case .week: "week"
+        case .month: "month"
+        case .year: "year"
+        @unknown default: "unknown"
+        }
     }
 }

@@ -11,7 +11,5 @@ enum PiesKey {
 }
 
 extension UserDefaults {
-    static var pies: UserDefaults {
-        UserDefaults(suiteName: "com.pies.framework.v2")!
-    }
+    static let pies = UserDefaults(suiteName: "com.pies.framework.v2")!
 }
