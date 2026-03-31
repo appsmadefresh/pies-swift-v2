@@ -34,7 +34,7 @@ Open the Pies dashboard app, tap **+**, and add your app. You'll receive an **Ap
 
 ### 3. Configure
 
-In your app's entry point, add:
+In your app's entry point, add (must be called on the main thread — do not wrap in a background queue):
 
 ```swift
 import Pies
