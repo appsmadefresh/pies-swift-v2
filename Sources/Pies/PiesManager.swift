@@ -28,6 +28,13 @@ final class PiesManager {
 
         PiesLogger.shared.level = logLevel
 
+        // Reset any cached stopTracking state so the SDK gets a clean slate.
+        // If the server still wants tracking stopped, it will re-send the directive.
+        defaults.removeObject(forKey: PiesKey.trackingStopped)
+        defaults.removeObject(forKey: PiesKey.stopTrackingUntil)
+        defaults.removeObject(forKey: PiesKey.stopTrackingReason)
+        defaults.removeObject(forKey: PiesKey.stopTrackingCacheEnabled)
+
         ensureDeviceId()
 
         NetworkMonitor.shared.start()
